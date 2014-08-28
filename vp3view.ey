@@ -1,0 +1,170 @@
+#!./loaded
+
+# parser according to http://www.jasonweiler.com/VP3FileFormatInfo.html
+
+{ 1 :read 0 -01* } /readUint1 deffd
+{ 2 :read 0 1 -02*12* 256 mul add } /readUint2 deffd
+{ 4 :read 0 1 2 3 -04*14*24*34* 3 { 256 mul add } rep } /readUint4 deffd
+{ _ 128 ge { 256 sub } rep } /sign8 deffd
+{ _ 32768 ge { 65536 sub } rep } /sign16 deffd
+{ _ 2147483648 ge { 4294967296 sub } rep } /sign32 deffd
+|readUint1 |sign8 ; /readSint1 deffd
+|readUint2 |sign16 ; /readSint2 deffd
+|readUint4 |sign32 ; /readSint4 deffd
+{ readUint2 :read } /readString deffd
+{ ==divisor _ 0 lt { neg divisor div neg } { divisor div } ? * } /idiv deffd
+
+"0123456789ABCDEF" ==:base16digits
+
+{
+  [ -01 _ 16 div base16digits * -01 16 mod base16digits * ] reverse str .fromArray
+} /base16encode2 deffd
+
+sys .argv len 3 neq { "Usage: ./vp3view.ey <file.vp3> <output.svg>" die } rep
+
+sys .file ":" via
+sys .file "<-" via
+1 sys .argv * :open
+<-truncating <-creating <-writeonly 2 sys .argv * <-open
+
+"<?xml version=\"1.0\" standalone=\"no\" ?>\n" <-writeall
+"<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n" <-writeall
+"<svg width=\"100%\" height=\"100%\" version=\"1.0\" xmlns=\"http://www.w3.org/2000/svg\">\n" <-writeall
+
+6 :read "%vsm%\0" neq { "Not a valid vp3 file" die } rep
+readString dump
+3 :read |dump each # purpose unknown
+"Remaining file size: " readUint4 txt .produce .u cat dump
+readString dump
+
+"Positive X Image μm: " readSint4 txt .produce .i cat dump
+"Positive Y Image μm: " readSint4 txt .produce .i cat dump
+"Negative X Image μm: " readSint4 _ ==negXextend txt .produce .i cat dump
+"Negative Y Image μm: " readSint4 _ ==negYextend txt .produce .i cat dump
+"Thread length (??? approx): " 4 :read 3 2 1 0 -34*24*14*04* 3 { 256 mul add } rep 29 sub txt .produce .i cat dump
+1 :read |dump each # purpose unknown
+"Number of colors: " readSint1 txt .produce .i cat dump
+6 :read |dump each # purpose unknown
+
+"Remaining file size: " readUint4 txt .produce .u cat dump
+
+"Origin X μm: " readSint4 txt .produce .i cat dump
+"Origin Y μm: " readSint4 txt .produce .i cat dump
+3 :read |dump each # purpose unknown
+
+"Centered Negative X Image μm: " readSint4 txt .produce .i cat dump
+"Centered Positive X Image μm: " readSint4 txt .produce .i cat dump
+"Centered Negative Y Image μm: " readSint4 txt .produce .i cat dump
+"Centered Positive Y Image μm: " readSint4 txt .produce .i cat dump
+"Image width μm: " readSint4 txt .produce .i cat dump
+"Image height μm: " readSint4 txt .produce .i cat dump
+
+readString dump
+
+"vvv unknown stuff vvv" dump
+readUint2 txt .produce .u dump
+readUint4 txt .produce .u dump
+readUint4 txt .produce .u dump
+readUint4 txt .produce .u dump
+readUint4 txt .produce .u dump
+"^^^ unknown stuff ^^^" dump
+
+6 :read _ dump "xxPP\0" neq { "Could not find stitch section header" die } rep
+readString dump
+
+0 ==nonFirstColor
+"Number of colors: " readUint2 -010 txt .produce .u cat dump {
+  "=== Color ===" dump
+  nonFirstColor { 1 :read |dump each } rep # unknown
+  1 =nonFirstColor
+  3 :read |dump each # unknown
+  "Offset to next section: " readUint4 txt .produce .u cat dump
+  "Start X Offset in μm: " readSint4 _ ==xStartOffset txt .produce .i cat dump
+  "Start Y Offset in μm: " readSint4 _ ==yStartOffset txt .produce .i cat dump
+  readUint1 _ dump ==tableSize tableSize 1 neq { "Unexpected unknown table size" die } rep
+  1 :read |dump each # unknown
+  "(???) Rgb: " readUint1 _ ==red txt .produce .u cat dump
+  "(???) rGb: " readUint1 _ ==green txt .produce .u cat dump
+  "(???) rgB: " readUint1 _ ==blue txt .produce .u cat dump
+  tableSize {
+    5 :read |dump each # unknown
+  } rep
+  readString dump
+  readString dump
+  readString dump
+  "X Offset for next color in μm: " readSint4 txt .produce .i cat dump
+  "Y Offset for next color in μm: " readSint4 txt .produce .i cat dump
+  readString dump
+  "Stitch bytes: " readUint4 _ ==stitchBytes txt .produce .i cat dump
+
+  negXextend neg 100 div xStartOffset 100 idiv add ==x
+  negYextend neg 100 div yStartOffset 100 idiv sub ==y
+
+  { ==dy ==dx
+     dx "DX 100μm: " -01 txt .produce .i cat dump
+     dy "DX 100μm: " -01 txt .produce .i cat dump
+     [
+       "<line x1=\""
+       x txt .produce .i
+       "\" y1=\""
+       y txt .produce .i
+       "\" x2=\""
+       x dx add =x
+       y dy add =y
+       x txt .produce .i
+       "\" y2=\""
+       y txt .produce .i
+       "\" stroke=\"#"
+       red base16encode2
+       green base16encode2
+       blue base16encode2
+       "\" />\n"
+     ] |cat fold <-writeall
+  } /handleStitch deffst
+
+  { ==y ==x
+   [
+     "<circle x=\""
+     x txt .produce .i
+     "\" y=\""
+     y txt .produce .i
+     "\" r=\"10\" fill=\"#000000\" />\n"
+   ] |cat fold <-writeall
+  } /placeMarker deffst
+
+  3 :read |dump each # unknown
+  0 ==stitches
+  3 ==i { i stitchBytes lt } {
+    "( " i txt .produce .u cat " / " cat stitchBytes txt .produce .u cat ")" cat dump
+    stitches txt .produce .u dump stitches 1 add =stitches
+    i 1 add =i readSint1 ==dx
+    i 1 add =i readSint1 ==dy
+    dx 128 neg eq {
+      "Special stitch" dump
+      [
+        { dy 0 eq dy 3 eq or } {
+          # x y placeMarker
+        } # stitch ignored
+        { dy 1 eq } {
+          i 2 add =i readSint2 # ==dx
+          i 2 add =i readSint2 # ==dy
+          handleStitch
+          i 2 add =i readSint2 dump
+        }
+        { 1 } { "Unknown special stitch: " dy txt .produce .u cat die }
+      ] conds
+    } {
+      dx dy handleStitch
+    } ? *
+  } loop
+
+  "X: " x txt .produce .i cat dump
+  "Y: " y txt .produce .i cat dump
+} rep
+
+:close
+
+"</svg>\n" <-writeall
+<-close
+
+# vim: syn=elymas
