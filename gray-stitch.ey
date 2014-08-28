@@ -4,7 +4,7 @@ bin .print "<=" via
 { _ ==s len <=un16 s cat } /string deffd
 { ==divisor _ 0 lt { neg divisor div neg } { divisor div } ? * } '00.0 /idiv deffd
 
-sys .argv len 4 neq { "Usage: ./gray-stitch.ey <μm cross size (try 2000)> <input.pnm (grayscale, gimp .ppm, raw data formatting)> <output.vp3>" die } rep
+sys .argv len 4 neq { "Usage: ./gray-stitch.ey <μm cross size (try 2000)> <input.ppm (grayscale, gimp .ppm, raw data formatting)> <output.vp3>" die } rep
 
 sys .file ":" via
 sys .file "<-" via
