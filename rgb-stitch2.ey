@@ -1,0 +1,270 @@
+#!./loaded
+
+bin .print "<=" via
+{ _ ==s len <=un16 s cat } /string deffd
+{ ==divisor _ 0 lt { neg divisor div neg } { divisor div } ? * } '00.0 /idiv deffd
+
+sys .argv len 5 neq { "Usage: ./rgb-stitch2.ey <μm cross size (try 2400 or 3600)> <line overlap promille (try 750)> <input.ppm (rgb, gimp .ppm, raw data formatting)> <output.vp3>" die } rep
+
+sys .file ":" via
+sys .file "<-" via
+"Scale μm: " 1 sys .argv * txt .consume .u 100 div _ ==scale 100 mul txt .produce .u cat dump
+"Overlap μm: " 2 sys .argv * txt .consume .u _ ==lineOverlap scale mul 1000 div 100 mul txt .produce .u cat dump
+3 sys .argv * :open
+<-truncating <-creating <-writeonly 4 sys .argv * <-open
+
+0 ==imgHeight 0 ==imgWidth 0 ==imgMaxValue
+
+<
+  16000000 :read ==data
+  data "\n" str .split =*lines
+  0 lines "P6" neq { "Not in P6 format" die } rep
+  2 lines " " str .split _ 0 -01 * txt .consume .u =imgWidth
+                           1 -01 * txt .consume .u =imgHeight
+  3 lines txt .consume .u =imgMaxValue
+
+  "Width: " imgWidth txt .produce .u cat "   Height: " cat imgHeight txt .produce .u cat dump
+  "MaxValue: " imgMaxValue txt .produce .u cat dump
+
+  "" 4 |lines len range { lines cat "\n" cat } each
+> -- =*imgData
+
+{ =*positions ==count
+  |positions len 1 sub 2 div ==middle
+  count |positions len gt { count dump |positions len dump "Count larger than position len" die } rep
+  [
+    count 10 gt { middle 5 sub positions } rep
+    count  8 gt { middle 4 sub positions } rep
+    count  6 gt { middle 3 sub positions } rep
+    count  4 gt { middle 2 sub positions } rep
+    count  2 gt { middle 1 sub positions } rep
+    count  0 gt { middle positions } rep
+    count  1 gt { middle 1 add positions } rep
+    count  3 gt { middle 2 add positions } rep
+    count  5 gt { middle 3 add positions } rep
+    count  7 gt { middle 4 add positions } rep
+    count  9 gt { middle 5 add positions } rep
+  ]
+} /selectPositions deffd
+
+{ ==positions ==b ==g ==r =*stitch 
+  255 3 mul ==maxP
+  
+  0 imgHeight range { ==y
+    "( " y txt .produce .u cat " / " cat imgHeight txt .produce .u cat " )\n" cat sys .out .writeall
+    y 2 mod not ==even
+    scale even not { neg } rep ==dx
+    scale ==dy
+
+    0 ==otherSide
+
+    0 imgWidth range { ==x
+      y imgWidth mul
+      even { x } { imgWidth x sub 1 sub } ? * add 3 mul
+      _ 2 add imgData 255 mul imgMaxValue div ==pb
+      _ 1 add imgData 255 mul imgMaxValue div ==pg
+        0 add imgData 255 mul imgMaxValue div ==pr
+
+      0 ==p
+      [
+        { r } { 255 pg add pb add pr mul 255 div =p }
+        { g } { 255 pb add        pg mul 255 div =p }
+        { b } { 255               pb mul 255 div =p }
+      ] conds
+
+      p positions len 1 add mul maxP 1 add div # ==numberOfPositions
+
+      0 ==cx
+      positions selectPositions { dx mul 1000 idiv ==nx
+        # nx cx neq {
+        #   nx cx sub 0 stitch
+        # } rep
+        # 0 dy otherSide { neg } rep stitch
+        nx cx sub dy 1000 lineOverlap add mul 1000 idiv otherSide { neg } rep stitch
+        otherSide not =otherSide
+        nx =cx
+      } each
+
+      dx cx neq {
+        dx cx sub 0 stitch
+      } rep
+    } each
+
+    otherSide {
+      0 dy lineOverlap mul 1000 idiv neg stitch
+    } {
+      0 dy stitch
+    } ? *
+
+    "\n" sys .out .writeall
+  } each
+} /encodePixelsRB deffd
+
+{ ==positions ==b ==g ==r =*stitch 
+  255 3 mul ==maxP
+  
+  0 imgWidth range { ==x
+    "( " x txt .produce .u cat " / " cat imgWidth txt .produce .u cat " )\n" cat sys .out .writeall
+    x 2 mod not ==even
+    scale even not { neg } rep ==dy
+    scale ==dx
+
+    0 ==otherSide
+
+    0 imgHeight range { ==y
+      even { y } { imgHeight y sub 1 sub } ? * imgWidth mul
+      x add 3 mul
+      _ 2 add imgData 255 mul imgMaxValue div ==pb
+      _ 1 add imgData 255 mul imgMaxValue div ==pg
+        0 add imgData 255 mul imgMaxValue div ==pr
+
+      0 ==p
+      [
+        { r } { pr pg add pb add =p }
+        { g } { pg pb add =p }
+        { b } { pb =p }
+      ] conds
+
+      p positions len 1 add mul maxP 1 add div # ==numberOfPositions
+
+      0 ==cy
+      positions selectPositions { dy mul 1000 idiv ==ny
+        dx 1000 lineOverlap add mul 1000 idiv otherSide { neg } rep ny cy sub stitch
+        otherSide not =otherSide
+        ny =cy
+      } each
+
+      dy cy neq {
+        0 dy cy sub stitch
+      } rep
+    } each
+
+    otherSide {
+      dx lineOverlap mul 1000 idiv neg 0 stitch
+    } {
+      dx 0 stitch
+    } ? *
+
+    "\n" sys .out .writeall
+  } each
+} /encodePixelsG deffd
+
+0 ==xStart 0 ==yStart
+0 ==minX 0 ==maxX 0 ==minY 0 ==maxY
+
+{ =*producer ""
+  areaMeasureReset
+  [ 10 246 0 ] str .fromArray cat # unknown
+  ==data
+  list ==collectedData
+  {
+    stitch data -01 cat =data
+    data len 4096 gt {
+      data collectedData .append1
+      "" =data
+    } rep
+  } producer
+  "" collectedData { cat } each data cat
+} /rawStitchContent deffd
+
+#   r g b   [ positions of possible crossing lines 0 - 1000 ]
+{ { 255 0 0 [  0 142 285 428 571 714 857 ] encodePixelsRB } rawStitchContent } /rawStitchContentR deffd
+{ { 0 255 0 [ 47 189 332 475 618 761 904 ] encodePixelsG } rawStitchContent } /rawStitchContentG deffd
+{ { 0 0 255 [ 94 236 379 522 665 808 951 ] encodePixelsRB } rawStitchContent } /rawStitchContentB deffd
+
+< 0 ==x 0 ==y
+  { xStart =x yStart =y }
+  { ==dy ==dx
+    dx 128 neg gt dx 128 lt and
+    dy 128 neg gt dy 128 lt and and {
+      [ dx dy ] str .fromArray
+    } {
+      [ 128 1 ] str .fromArray dx <=sn16 dy <=sn16 [ 128 2 ] str .fromArray cat
+    } ? *
+    x dx add =x
+    y dy add =y
+    x minX lt { x =minX } rep
+    y minY lt { y =minY } rep
+    x maxX gt { x =maxX } rep
+    y maxY gt { y =maxY } rep
+  }
+> -- /stitch deffd /areaMeasureReset deffd
+
+rawStitchContentR { }_ =rawStitchContentR
+rawStitchContentG { }_ =rawStitchContentG
+rawStitchContentB { }_ =rawStitchContentB
+
+maxX minX sub ==xSize
+maxY minY sub ==ySize
+
+{ ==b ==g ==r =*rawSource ==name ""
+  minX neg xSize 2 div sub 100 mul <=sn32 # start X-offset
+  minY neg ySize 2 div sub 100 mul neg <=sn32 # start Y-offset
+  [ 1 0 ] str .fromArray cat # unknown
+  r <=sn8 # red
+  g <=sn8 # green
+  b <=sn8 # blue
+  [ 0 0 0 5 40 ] str .fromArray cat # unknown
+  "1234" string # unknown numeric string
+  name string # unknown what values are acceptable
+  "Thread type" string # "Robison-Anton Rayon 40" in all generated files
+  0 <=sn32 # start x offset for next color
+  0 <=sn32 # start y offset for next color
+  "\0" string
+  rawSource _ len "" -01 <=un32 -01 cat cat
+} /stitchContentRGB deffd
+
+{ "Red"   |rawStitchContentR 255 0 0 stitchContentRGB } /stitchContentR deffd
+{ "Green" |rawStitchContentG 0 255 0 stitchContentRGB } /stitchContentG deffd
+{ "Blue"  |rawStitchContentB 0 0 255 stitchContentRGB } /stitchContentB deffd
+
+{ ""
+  0 <=sn32 # origin X
+  0 <=sn32 # origin Y
+  [ 0 0 0 ] str .fromArray cat # unknown
+  xSize 100 mul 2 div <=sn32
+  ySize 100 mul 2 div <=sn32
+  xSize 100 mul 2 div neg <=sn32
+  ySize 100 mul 2 div neg <=sn32
+  xSize 100 mul <=sn32
+  ySize 100 mul <=sn32
+  "Yet another comment" string
+  25700 <=un16 # unknown
+  4096 <=un32 # unknown
+  0 <=un32 # unknown
+  0 <=un32 # unknown
+  4096 <=un32 # unknown
+  "xxPP\0" cat # stitch section header
+  "Yet another vendor string" string
+  3 <=un16 # number of colors
+  [ 0 5 0 ] str .fromArray cat # unknown
+  stitchContentR _ len 3 add "" -01 <=un32 -01 cat cat
+  [ 0 0 5 0 ] str .fromArray cat # unknown
+  stitchContentG _ len 3 add "" -01 <=un32 -01 cat cat
+  [ 0 0 5 0 ] str .fromArray cat # unknown
+  stitchContentB _ len 3 add "" -01 <=un32 -01 cat cat
+} /innerContent deffd
+
+{ ""
+  "File comments go here (or don't)" string
+  xSize 100 mul 2 div <=sn32
+  ySize 100 mul 2 div <=sn32
+  xSize 100 mul 2 div neg <=sn32
+  ySize 100 mul 2 div neg <=sn32
+  [ 0 0 122 134 ] str .fromArray cat # TODO thread length (ahem)
+  [ 0 ] str .fromArray cat # unknown
+  3 <=un8 # number of colors
+  [ 12 0 1 0 3 0 ] str .fromArray cat # unknown
+  innerContent _ len "" -01 <=un32 -01 cat cat
+} /mainContent deffd
+
+"%vsm%\0"
+"Stratum 0 Embroidery Hack\0" string
+[ 0 2 0 ] str .fromArray cat # unknown
+mainContent _ len "" -01 <=un32 -01 cat cat
+<-writeall
+
+:close
+<-close
+
+# vim: syn=elymas
