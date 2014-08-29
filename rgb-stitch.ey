@@ -4,13 +4,14 @@ bin .print "<=" via
 { _ ==s len <=un16 s cat } /string deffd
 { ==divisor _ 0 lt { neg divisor div neg } { divisor div } ? * } '00.0 /idiv deffd
 
-sys .argv len 4 neq { "Usage: ./rgb-stitch.ey <μm cross size (try 2400 or 3600)> <input.ppm (rgb, gimp .ppm, raw data formatting)> <output.vp3>" die } rep
+sys .argv len 5 neq { "Usage: ./rgb-stitch.ey <μm cross size (try 2400 or 3600)> <line overlap promille (try 750)> <input.ppm (rgb, gimp .ppm, raw data formatting)> <output.vp3>" die } rep
 
 sys .file ":" via
 sys .file "<-" via
 "Scale μm: " 1 sys .argv * txt .consume .u 100 div _ ==scale 100 mul txt .produce .u cat dump
-2 sys .argv * :open
-<-truncating <-creating <-writeonly 3 sys .argv * <-open
+"Overlap μm: " 2 sys .argv * txt .consume .u _ ==lineOverlap scale mul 1000 div 100 mul txt .produce .u cat dump
+3 sys .argv * :open
+<-truncating <-creating <-writeonly 4 sys .argv * <-open
 
 0 ==imgHeight 0 ==imgWidth 0 ==imgMaxValue
 
@@ -73,7 +74,7 @@ sys .file "<-" via
         #   nx cx sub 0 stitch
         # } rep
         # 0 dy otherSide { neg } rep stitch
-        nx cx sub dy otherSide { neg } rep stitch
+        nx cx sub dy 1000 lineOverlap add mul 1000 idiv otherSide { neg } rep stitch
         otherSide not =otherSide
         nx =cx
       } each
@@ -83,9 +84,11 @@ sys .file "<-" via
       } rep
     } each
 
-    otherSide not {
+    otherSide {
+      0 dy lineOverlap mul 1000 idiv neg stitch
+    } {
       0 dy stitch
-    } rep
+    } ? *
 
     "\n" sys .out .writeall
   } each
@@ -110,9 +113,12 @@ sys .file "<-" via
 } /rawStitchContent deffd
 
 #   r g b   [ positions of possible crossing lines 0 - 1000 ]
-{ { 255 0 0 [   0 200 400 600 800 ] encodePixels } rawStitchContent } /rawStitchContentR deffd
-{ { 0 255 0 [  66 266 466 666 866 ] encodePixels } rawStitchContent } /rawStitchContentG deffd
-{ { 0 0 255 [ 133 333 533 733 933 ] encodePixels } rawStitchContent } /rawStitchContentB deffd
+# { { 255 0 0 [   0 200 400 600 800 ] encodePixels } rawStitchContent } /rawStitchContentR deffd
+# { { 0 255 0 [  66 266 466 666 866 ] encodePixels } rawStitchContent } /rawStitchContentG deffd
+# { { 0 0 255 [ 133 333 533 733 933 ] encodePixels } rawStitchContent } /rawStitchContentB deffd
+{ { 255 0 0 [   0 250 500 750 ] encodePixels } rawStitchContent } /rawStitchContentR deffd
+{ { 0 255 0 [  83 333 583 833 ] encodePixels } rawStitchContent } /rawStitchContentG deffd
+{ { 0 0 255 [ 166 416 666 916 ] encodePixels } rawStitchContent } /rawStitchContentB deffd
 
 < 0 ==x 0 ==y
   { xStart =x yStart =y }
