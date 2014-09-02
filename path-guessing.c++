@@ -6,10 +6,11 @@
 #include <sys/time.h>
 #include <algorithm>
 #include <fstream>
+#include <sstream>
 
 #define STITCH_COST 10
-#define SCALE 3
 #define MAXSTITCH 20
+int SCALE = 3;
 
 using namespace std;
 
@@ -258,10 +259,13 @@ SDL_Surface *simulateRGBView(SDL_Surface *src) {
 }
 
 int main(int argc, const char *const argv[]) {
-  if(argc != 3) {
-    cerr << "usage: ./path-guessing <input image> <output.p>" << endl;
+  if(argc != 4) {
+    cerr << "usage: ./path-guessing <scale reduction (try 3)> <input image> <output.p>" << endl;
     return 1;
   }
+
+  istringstream scale(argv[1]);
+  scale >> SCALE;
 
   if (SDL_Init(SDL_INIT_VIDEO) != 0) {
     cerr << "Could not init SDL: " << SDL_GetError() << endl;
@@ -274,7 +278,12 @@ int main(int argc, const char *const argv[]) {
     return 1;
   }
 
-  SDL_Surface *const rawImg = IMG_Load(argv[1]);
+  SDL_Surface *const rawImg = IMG_Load(argv[2]);
+  if(!rawImg) {
+    cerr << "Could not load image" << endl;
+    return 1;
+  }
+
   SDL_Surface *const img = SDL_CreateRGBSurface(0, rawImg->w, rawImg->h, 32, 0xff, 0xff00, 0xff0000, 0xff000000u);
   if(!img || !rawImg) {
     cerr << "Could not load image" << endl;
@@ -284,7 +293,7 @@ int main(int argc, const char *const argv[]) {
 
   SDL_Surface *zoomedImg = simulateRGBView(img);
 
-  SDL_Window *const win = SDL_CreateWindow("path-guessing", 0, 0, img->w / 3, img->h / 3, 0);
+  SDL_Window *const win = SDL_CreateWindow("path-guessing", 0, 0, img->w / SCALE, img->h / SCALE, 0);
   if(!win) {
     cerr << "Could not open window" << endl;
     return 1;
@@ -335,7 +344,7 @@ int main(int argc, const char *const argv[]) {
       SDL_BlitSurface(zoomed, 0, screen, 0);
       SDL_UpdateWindowSurface(win);
 
-      ofstream vp3(argv[2]);
+      ofstream vp3(argv[3]);
       rgbw.savePaths(vp3);
 
       last = time();
