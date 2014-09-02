@@ -1,0 +1,176 @@
+#!./loaded
+
+bin .print "<=" via
+{ _ ==s len <=un16 s cat } /string deffd
+{ ==divisor _ 0 lt { neg divisor div neg } { divisor div } ? * } '00.0 /idiv deffd
+{ ==s
+  0 s * 0 "-" * eq {
+    1 s str .postfix txt .consume .u neg
+  } {
+    s txt .consume .u
+  } ? *
+} '0.0 /readInt deffd
+
+sys .argv len 4 neq { "Usage: ./p-stitch.ey <μm per unit (try 200)> <input.p (from path-guessing)> <output.vp3>" die } rep
+
+sys .file ":" via
+sys .file "<-" via
+"Scale μm: " 1 sys .argv * txt .consume .u 100 div _ ==scale 100 mul txt .produce .u cat dump
+2 sys .argv * :open
+<-truncating <-creating <-writeonly 3 sys .argv * <-open
+
+0 ==imgHeight 0 ==imgWidth 0 ==imgMaxValue
+
+list ==dataW
+list ==dataR
+list ==dataG
+list ==dataB
+
+<
+  16000000 :read ==data
+  data "\n" str .split ==lines
+  list ==target
+
+  lines { _ dump ==l
+    [
+      { l "White" eq } { dataW =target }
+      { l "Red" eq } { dataR =target }
+      { l "Green" eq } { dataG =target }
+      { l "Blue" eq } { dataB =target }
+      { l "" eq } { }
+      { 1 } {
+        l " " str .split readInt scale mul target .append1
+      }
+    ] conds
+  } each
+> --
+
+{ ==data ==b ==g ==r =*stitch 
+  data {
+    2 dearray stitch
+  } each
+} /encodePixels deffd
+
+0 ==xStart 0 ==yStart
+0 ==minX 0 ==maxX 0 ==minY 0 ==maxY
+
+{ =*producer ""
+  areaMeasureReset
+  [ 10 246 0 ] str .fromArray cat # unknown
+  ==data
+  list ==collectedData
+  {
+    stitch data -01 cat =data
+    data len 4096 gt {
+      data collectedData .append1
+      "" =data
+    } rep
+  } producer
+  "" collectedData { cat } each data cat
+} /rawStitchContent deffd
+
+{ { 255 255 255 dataW encodePixels } rawStitchContent } /rawStitchContentW deffd
+{ { 255   0   0 dataR encodePixels } rawStitchContent } /rawStitchContentR deffd
+{ {   0 255   0 dataG encodePixels } rawStitchContent } /rawStitchContentG deffd
+{ {   0   0 255 dataB encodePixels } rawStitchContent } /rawStitchContentB deffd
+
+< 0 ==x 0 ==y
+  { xStart =x yStart =y }
+  { ==dy ==dx
+    dx 128 neg gt dx 128 lt and
+    dy 128 neg gt dy 128 lt and and {
+      [ dx dy ] str .fromArray
+    } {
+      [ 128 1 ] str .fromArray dx <=sn16 dy <=sn16 [ 128 2 ] str .fromArray cat
+    } ? *
+    x dx add =x
+    y dy add =y
+    x minX lt { x =minX } rep
+    y minY lt { y =minY } rep
+    x maxX gt { x =maxX } rep
+    y maxY gt { y =maxY } rep
+  }
+> -- /stitch deffd /areaMeasureReset deffd
+
+rawStitchContentW { }_ =rawStitchContentW
+rawStitchContentR { }_ =rawStitchContentR
+rawStitchContentG { }_ =rawStitchContentG
+rawStitchContentB { }_ =rawStitchContentB
+
+maxX minX sub ==xSize
+maxY minY sub ==ySize
+
+{ ==b ==g ==r =*rawSource ==name ""
+  minX neg xSize 2 div sub 100 mul <=sn32 # start X-offset
+  minY neg ySize 2 div sub 100 mul neg <=sn32 # start Y-offset
+  [ 1 0 ] str .fromArray cat # unknown
+  r <=sn8 # red
+  g <=sn8 # green
+  b <=sn8 # blue
+  [ 0 0 0 5 40 ] str .fromArray cat # unknown
+  "1234" string # unknown numeric string
+  name string # unknown what values are acceptable
+  "Thread type" string # "Robison-Anton Rayon 40" in all generated files
+  0 <=sn32 # start x offset for next color
+  0 <=sn32 # start y offset for next color
+  "\0" string
+  rawSource _ len "" -01 <=un32 -01 cat cat
+} /stitchContentRGB deffd
+
+{ "White" |rawStitchContentW 255 255 255 stitchContentRGB } /stitchContentW deffd
+{ "Red"   |rawStitchContentR 255   0   0 stitchContentRGB } /stitchContentR deffd
+{ "Green" |rawStitchContentG   0 255   0 stitchContentRGB } /stitchContentG deffd
+{ "Blue"  |rawStitchContentB   0   0 255 stitchContentRGB } /stitchContentB deffd
+
+{ ""
+  0 <=sn32 # origin X
+  0 <=sn32 # origin Y
+  [ 0 0 0 ] str .fromArray cat # unknown
+  xSize 100 mul 2 div <=sn32
+  ySize 100 mul 2 div <=sn32
+  xSize 100 mul 2 div neg <=sn32
+  ySize 100 mul 2 div neg <=sn32
+  xSize 100 mul <=sn32
+  ySize 100 mul <=sn32
+  "Yet another comment" string
+  25700 <=un16 # unknown
+  4096 <=un32 # unknown
+  0 <=un32 # unknown
+  0 <=un32 # unknown
+  4096 <=un32 # unknown
+  "xxPP\0" cat # stitch section header
+  "Yet another vendor string" string
+  4 <=un16 # number of colors
+  [ 0 5 0 ] str .fromArray cat # unknown
+  stitchContentW _ len 3 add "" -01 <=un32 -01 cat cat
+  [ 0 0 5 0 ] str .fromArray cat # unknown
+  stitchContentR _ len 3 add "" -01 <=un32 -01 cat cat
+  [ 0 0 5 0 ] str .fromArray cat # unknown
+  stitchContentG _ len 3 add "" -01 <=un32 -01 cat cat
+  [ 0 0 5 0 ] str .fromArray cat # unknown
+  stitchContentB _ len 3 add "" -01 <=un32 -01 cat cat
+} /innerContent deffd
+
+{ ""
+  "File comments go here (or don't)" string
+  xSize 100 mul 2 div <=sn32
+  ySize 100 mul 2 div <=sn32
+  xSize 100 mul 2 div neg <=sn32
+  ySize 100 mul 2 div neg <=sn32
+  [ 0 0 122 134 ] str .fromArray cat # TODO thread length (ahem)
+  [ 0 ] str .fromArray cat # unknown
+  4 <=un8 # number of colors
+  [ 12 0 1 0 3 0 ] str .fromArray cat # unknown
+  innerContent _ len "" -01 <=un32 -01 cat cat
+} /mainContent deffd
+
+"%vsm%\0"
+"Stratum 0 Embroidery Hack\0" string
+[ 0 2 0 ] str .fromArray cat # unknown
+mainContent _ len "" -01 <=un32 -01 cat cat
+<-writeall
+
+:close
+<-close
+
+# vim: syn=elymas

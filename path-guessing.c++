@@ -5,6 +5,7 @@
 #include <vector>
 #include <sys/time.h>
 #include <algorithm>
+#include <fstream>
 
 #define STITCH_COST 10
 #define SCALE 3
@@ -151,6 +152,17 @@ struct RGBW {
     initPath(g, s);
     initPath(b, s);
   }
+
+  void savePaths(ostream &o) {
+    o << "White" << endl;
+    for(Path::Step &s: w.steps) o << s.x << " " << s.y << endl;
+    o << "Red" << endl;
+    for(Path::Step &s: r.steps) o << s.x << " " << s.y << endl;
+    o << "Green" << endl;
+    for(Path::Step &s: g.steps) o << s.x << " " << s.y << endl;
+    o << "Blue" << endl;
+    for(Path::Step &s: b.steps) o << s.x << " " << s.y << endl;
+  }
 };
 
 uint32_t &pixel(SDL_Surface *s, int x, int y) {
@@ -246,8 +258,8 @@ SDL_Surface *simulateRGBView(SDL_Surface *src) {
 }
 
 int main(int argc, const char *const argv[]) {
-  if(argc != 2) {
-    cerr << "usage: ./path-guessing <input image>" << endl;
+  if(argc != 3) {
+    cerr << "usage: ./path-guessing <input image> <output.p>" << endl;
     return 1;
   }
 
@@ -322,6 +334,9 @@ int main(int argc, const char *const argv[]) {
       // SDL_BlitSurface(zoomedImg, 0, screen, 0);
       SDL_BlitSurface(zoomed, 0, screen, 0);
       SDL_UpdateWindowSurface(win);
+
+      ofstream vp3(argv[2]);
+      rgbw.savePaths(vp3);
 
       last = time();
     }
