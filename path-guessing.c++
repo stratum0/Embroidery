@@ -11,6 +11,7 @@
 #define STITCH_COST 10
 #define MAXSTITCH 20
 int SCALE = 3;
+int DEFAULT_STITCH = 10;
 
 using namespace std;
 
@@ -118,7 +119,7 @@ struct RGBW {
   }
 
   void initPath(Path &p, SDL_Surface *s) {
-    int distance = 50;
+    int distance = 5 * DEFAULT_STITCH;
 
     float x = s->w / 2;
     float y = s->h / 2;
@@ -206,9 +207,9 @@ Path generateRandomPath(SDL_Surface *s, int r, int g, int b) {
   int x = s->w / 2;
   int y = s->h / 2;
 
-  for(int i = 0; i < s->w * s->h / 10; ++i) {
-    int rx = (rand() % 21) - 10;
-    int ry = (rand() % 21) - 10;
+  for(int i = 0; i < s->w * s->h / DEFAULT_STITCH; ++i) {
+    int rx = (rand() % (2 * DEFAULT_STITCH + 1)) - DEFAULT_STITCH;
+    int ry = (rand() % (2 * DEFAULT_STITCH + 1)) - DEFAULT_STITCH;
 
     if(x + rx >= 0 && x + rx < s->w &&
         y + ry >= 0 && y + ry < s->h) {
@@ -259,13 +260,16 @@ SDL_Surface *simulateRGBView(SDL_Surface *src) {
 }
 
 int main(int argc, const char *const argv[]) {
-  if(argc != 4) {
-    cerr << "usage: ./path-guessing <scale reduction (try 3)> <input image> <output.p>" << endl;
+  if(argc != 5) {
+    cerr << "usage: ./path-guessing <scale reduction (try 3)> <default stitch size (try 10)> <input image> <output.p>" << endl;
     return 1;
   }
 
   istringstream scale(argv[1]);
   scale >> SCALE;
+
+  istringstream default_stitch(argv[2]);
+  default_stitch >> DEFAULT_STITCH;
 
   if (SDL_Init(SDL_INIT_VIDEO) != 0) {
     cerr << "Could not init SDL: " << SDL_GetError() << endl;
@@ -278,7 +282,7 @@ int main(int argc, const char *const argv[]) {
     return 1;
   }
 
-  SDL_Surface *const rawImg = IMG_Load(argv[2]);
+  SDL_Surface *const rawImg = IMG_Load(argv[3]);
   if(!rawImg) {
     cerr << "Could not load image" << endl;
     return 1;
@@ -344,7 +348,7 @@ int main(int argc, const char *const argv[]) {
       SDL_BlitSurface(zoomed, 0, screen, 0);
       SDL_UpdateWindowSurface(win);
 
-      ofstream vp3(argv[3]);
+      ofstream vp3(argv[4]);
       rgbw.savePaths(vp3);
 
       last = time();
