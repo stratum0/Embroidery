@@ -312,35 +312,35 @@ uint64_t time() {
   return tv.tv_sec * 1000000ull + tv.tv_usec;
 }
 
-SDL_Surface *simulateRGBView(SDL_Surface *src) {
+template<int SCALE> inline SDL_Surface *simulateRGBView(SDL_Surface *src) {
   SDL_Surface *ret = SDL_CreateRGBSurface(0, src->w / SCALE, src->h / SCALE, 32, 0xff, 0xff00, 0xff0000, 0xff000000u);
 
   SDL_LockSurface(ret);
 
-  for(int y = 0; y < ret->h; ++y) {
-    for(int x = 0; x < ret->w; ++x) {
+  for(int y = SCALE; y < ret->h - SCALE; ++y) {
+    for(int x = SCALE; x < ret->w - SCALE; ++x) {
       int r = 0, g = 0, b = 0;
 
       int count = 0;
 
       for(int yy = -SCALE; yy < SCALE + 1; ++yy) {
+        const int py = y * SCALE + yy;
+
         for(int xx = -SCALE; xx < SCALE + 1; ++xx) {
           const int px = x * SCALE + xx;
-          const int py = y * SCALE + yy;
+          const uint32_t &p = pixel(src, px, py);
 
-          if(px < 0 || py < 0 || px >= src->w || py >= src->h) continue;
-
-          r += pixel(src, px, py) & 0xff;
-          g += (pixel(src, px, py) & 0xff00) >> 8;
-          b += (pixel(src, px, py) & 0xff0000) >> 16;
+          r += p & 0xff;
+          g += p & 0xff00;
+          b += p & 0xff0000;
           ++count;
         }
       }
 
       pixel(ret, x, y) =
-        r / count + 
-        g / count * 0x100 + 
-        b / count * 0x10000 +
+        (r / count & 0xff) + 
+        (g / count & 0xff00) + 
+        (b / count & 0xff0000) +
         0xff000000ull;
     }
   }
@@ -448,7 +448,16 @@ int main(int argc, const char *const argv[]) {
   }
   SDL_BlitSurface(rawImg, 0, img, 0);
 
-  SDL_Surface *zoomedImg = simulateRGBView(img);
+  SDL_Surface *zoomedImg;
+  switch(SCALE) {
+    case 1: zoomedImg = simulateRGBView<1>(img); break;
+    case 2: zoomedImg = simulateRGBView<2>(img); break;
+    case 3: zoomedImg = simulateRGBView<3>(img); break;
+    case 4: zoomedImg = simulateRGBView<4>(img); break;
+    case 5: zoomedImg = simulateRGBView<5>(img); break;
+    default: throw "scale too large";
+  }
+
   SDL_Surface *edgedImg = findEdges(img);
 
   SDL_Window *const win = SDL_CreateWindow("path-guessing2", 0, 0, img->w / SCALE, img->h / SCALE, 0);
@@ -487,7 +496,16 @@ int main(int argc, const char *const argv[]) {
     n.mutate(tmp, stage);
     ++stage;
     n.render(tmp);
-    SDL_Surface *zoomed = simulateRGBView(tmp);
+    SDL_Surface *zoomed;
+    switch(SCALE) {
+      case 1: zoomed = simulateRGBView<1>(tmp); break;
+      case 2: zoomed = simulateRGBView<2>(tmp); break;
+      case 3: zoomed = simulateRGBView<3>(tmp); break;
+      case 4: zoomed = simulateRGBView<4>(tmp); break;
+      case 5: zoomed = simulateRGBView<5>(tmp); break;
+      default: throw "scale too large";
+    }
+
     int64_t pixelQuality = rate(zoomedImg, zoomed);
     int64_t stitchQuality = rateStitchDirection(rgbw, edgedImg);
     int64_t quality2 = pixelQuality + stitchQuality;
