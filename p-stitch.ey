@@ -11,7 +11,7 @@ bin .print "<=" via
   } ? *
 } '0.0 /readInt deffd
 
-sys .argv len 4 neq { "Usage: ./p-stitch.ey <μm per unit (try 200)> <input.p (from path-guessing)> <output.vp3>" die } rep
+sys .argv len 4 neq { "Usage: ./p-stitch.ey <μm per unit (try 300)> <input.p (from path-guessing)> <output.vp3>" die } rep
 
 sys .file ":" via
 sys .file "<-" via
