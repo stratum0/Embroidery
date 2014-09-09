@@ -153,7 +153,7 @@ maxY minY sub ==ySize
   "Yet another vendor string" string
   1 <=un16 # number of colors
   [ 0 5 0 ] str .fromArray cat # unknown
-  stitchContent _ len 3 add "" -01 <=un32 -01 cat cat
+  stitchContent _ len 1 add "" -01 <=un32 -01 cat cat
 } /innerContent deffd
 
 { ""
