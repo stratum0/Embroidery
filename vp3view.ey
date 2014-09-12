@@ -102,7 +102,7 @@ readString dump
 
   { ==dy ==dx
      dx "DX 100μm: " -01 txt .produce .i cat dump
-     dy "DX 100μm: " -01 txt .produce .i cat dump
+     dy "DY 100μm: " -01 txt .produce .i cat dump
      [
        "<line x1=\""
        x txt .produce .i

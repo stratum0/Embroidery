@@ -4,7 +4,7 @@ bin .print "<=" via
 { _ ==s len <=un16 s cat } /string deffd
 { ==divisor _ 0 lt { neg divisor div neg } { divisor div } ? * } '00.0 /idiv deffd
 
-sys .argv len 5 neq { "Usage: ./rgb-stitch2.ey <μm cross size (try 2400 or 3600)> <line overlap promille (try 750)> <input.ppm (rgb, gimp .ppm, raw data formatting)> <output.vp3>" die } rep
+sys .argv len 5 neq { "Usage: ./rgb-stitch3.ey <μm cross size (try 2400 or 3600)> <line overlap promille (try 750)> <input.ppm (rgb, gimp .ppm, raw data formatting)> <output.vp3>" die } rep
 
 sys .file ":" via
 sys .file "<-" via
@@ -98,56 +98,7 @@ sys .file "<-" via
 
     "\n" sys .out .writeall
   } each
-} /encodePixelsRB deffd
-
-{ ==positions ==b ==g ==r =*stitch 
-  255 3 mul ==maxP
-  
-  0 imgWidth range { ==x
-    "( " x txt .produce .u cat " / " cat imgWidth txt .produce .u cat " )\n" cat sys .out .writeall
-    x 2 mod not ==even
-    scale even not { neg } rep ==dy
-    scale ==dx
-
-    0 ==otherSide
-
-    0 imgHeight range { ==y
-      even { y } { imgHeight y sub 1 sub } ? * imgWidth mul
-      x add 3 mul
-      _ 2 add imgData 255 mul imgMaxValue div ==pb
-      _ 1 add imgData 255 mul imgMaxValue div ==pg
-        0 add imgData 255 mul imgMaxValue div ==pr
-
-      0 ==p
-      [
-        { r } { pr pg add pb add =p }
-        { g } { pg pb add =p }
-        { b } { pb =p }
-      ] conds
-
-      p positions len 1 add mul maxP 1 add div # ==numberOfPositions
-
-      0 ==cy
-      positions selectPositions { dy mul 1000 idiv ==ny
-        dx 1000 lineOverlap add mul 1000 idiv otherSide { neg } rep ny cy sub stitch
-        otherSide not =otherSide
-        ny =cy
-      } each
-
-      dy cy neq {
-        0 dy cy sub stitch
-      } rep
-    } each
-
-    otherSide {
-      dx lineOverlap mul 1000 idiv neg 0 stitch
-    } {
-      dx 0 stitch
-    } ? *
-
-    "\n" sys .out .writeall
-  } each
-} /encodePixelsG deffd
+} /encodePixels deffd
 
 0 ==xStart 0 ==yStart
 0 ==minX 0 ==maxX 0 ==minY 0 ==maxY
@@ -168,9 +119,9 @@ sys .file "<-" via
 } /rawStitchContent deffd
 
 #   r g b   [ positions of possible crossing lines 0 - 1000 ]
-{ { 255 0 0 [  0 142 285 428 571 714 857 ] encodePixelsRB } rawStitchContent } /rawStitchContentR deffd
-{ { 0 255 0 [ 47 189 332 475 618 761 904 ] encodePixelsG } rawStitchContent } /rawStitchContentG deffd
-{ { 0 0 255 [ 94 236 379 522 665 808 951 ] encodePixelsRB } rawStitchContent } /rawStitchContentB deffd
+{ { 255 0 0 [  0 142 285 428 571 714 857 ] encodePixels } rawStitchContent } /rawStitchContentR deffd
+{ { 0 255 0 [ 47 189 332 475 618 761 904 ] encodePixels } rawStitchContent } /rawStitchContentG deffd
+{ { 0 0 255 [ 94 236 379 522 665 808 951 ] encodePixels } rawStitchContent } /rawStitchContentB deffd
 
 < 0 ==x 0 ==y
   { xStart =x yStart =y }
