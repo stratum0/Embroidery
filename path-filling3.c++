@@ -13,7 +13,7 @@
 #define MINSTITCH 20
 #define MAXSTITCH 70
 #define MAXSTITCHERRORSQR 9
-#define MINAREA 9
+#define MINAREA 2
 // #define MAXSTITCHERRORSQR 20
 int SCALE = 3;
 int DEFAULT_STITCH = 10;
@@ -53,16 +53,6 @@ uint64_t time() {
   return tv.tv_sec * 1000000ull + tv.tv_usec;
 }
 
-int dirx(int dir) {
-  static const int DX[8] = { -1, -1, 0, 1, 1, 1, 0, -1 };
-  return DX[dir % 8];
-}
-
-int diry(int dir) {
-  static const int DY[8] = { 0, -1, -1, -1, 0, 1, 1, 1 };
-  return DY[dir % 8];
-}
-
 int remainingAreaRec(SDL_Surface *img, int x, int y, int area) {
   if(area <= 0) return 0;
 
@@ -90,6 +80,74 @@ bool hasAreaAbove(SDL_Surface *img, int x, int y, int area) {
   }
 
   return remainingAreaRec(img, x, y, area) == 0;
+}
+
+void moveToTopLeftRec(SDL_Surface *img, int &x, int &y, int sx, int sy) {
+  pixel(img, sx, sy) |= 0x0100;
+  if(sy < y || (sy == y && sx < x)) {
+    y = sy;
+    x = sx;
+  }
+
+  for(int dy = -1; dy < 2; ++dy) {
+    for(int dx = -1; dx < 2; ++dx) {
+      if(sy + dy < 0 || sy + dy >= img->h || sx + dx < 0 || sx + dx >= img->w) continue;
+
+      if(pixel(img, sx + dx, sy + dy) & 0xff && !(pixel(img, sx + dx, sy + dy) & 0xff00)) {
+        moveToTopLeftRec(img, x, y, sx + dx, sy + dy);
+      }
+    }
+  }
+}
+
+void moveToTopLeft(SDL_Surface *img, int &x, int &y) {
+  for(int sy = 0; sy < img->h; ++sy) {
+    for(int sx = 0; sx < img->w; ++sx) {
+      pixel(img, sx, sy) &= 0xffff00fful;
+    }
+  }
+
+  moveToTopLeftRec(img, x, y, x, y);
+}
+
+bool findStart(SDL_Surface *img, int &cx, int &cy, int &ox, int &oy, Path &path) {
+  int bestX = -1;
+  int bestY = -1;
+  int bestDist = 999999999;
+
+  for(int y = 0; y < img->h; ++y) {
+    for(int x = 0; x < img->w; ++x) {
+      if(pixel(img, x, y) & 0xff) {
+        int dist = (cx - x) * (cx - x) + (cy - y) * (cy - y);
+        if(dist < bestDist) {
+          bestX = x;
+          bestY = y;
+          bestDist = dist;
+        }
+      }
+    }
+  }
+
+  if(bestX < 0) return false;
+
+  std::cerr << "before: " << bestX << "," << bestY << std::endl;
+  moveToTopLeft(img, bestX, bestY);
+  std::cerr << "after: " << bestX << "," << bestY << std::endl;
+  if(!(pixel(img, bestX, bestY) & 0xff)) {
+    std::cerr << "wrong" << pixel(img, bestX, bestY) << std::endl;
+  }
+
+  cx = bestX;
+  cy = bestY;
+  if(ox > 0) path.steps.push_back({cx - ox, cy - oy});
+  ox = cx;
+  oy = cy;
+
+  if(oy < 0 || ox < 0) {
+    ox = cx;
+    oy = cy;
+  }
+  return true;
 }
 
 int main(int argc, const char *const argv[]) {
@@ -142,14 +200,21 @@ int main(int argc, const char *const argv[]) {
   Path path;
 
   SDL_Event event;
-  bool running = true;
   uint64_t last = time();
 
   int cx = 0;
   int cy = 0;
   int ox = -1;
   int oy = -1;
-  int dir = 0;
+#define MODE_RIGHT 0
+#define MODE_RIGHTOVERSCAN 1
+#define MODE_RIGHTBACKSCAN 2
+#define MODE_LEFT 3
+#define MODE_LEFTOVERSCAN 4
+#define MODE_LEFTBACKSCAN 5
+  int mode = 0;
+
+  bool running = findStart(img, cx, cy, ox, oy, path);
 
   while(running) {
     while(SDL_PollEvent(&event)) {
@@ -158,74 +223,76 @@ int main(int argc, const char *const argv[]) {
       }
     }
 
-    if(!(pixel(img, cx, cy) & 0xff)) {
-      bool found;
-
-      int bestX;
-      int bestY;
-      int bestDist;
-
-      do {
-        found = true;
-
-        bestX = -1;
-        bestY = -1;
-        bestDist = 999999999;
-
-        for(int y = 0; y < img->h; ++y) {
-          for(int x = 0; x < img->w; ++x) {
-            if(pixel(img, x, y) & 0xff) {
-              int dist = (cx - x) * (cx - x) + (cy - y) * (cy - y);
-              if(dist < bestDist) {
-                bestX = x;
-                bestY = y;
-                bestDist = dist;
-              }
-            }
-          }
-        }
-
-        if(bestX >= 0) {
-          if(!hasAreaAbove(img, bestX, bestY, MINAREA)) {
-            pixel(img, bestX, bestY) = 0xff00ff00ul;
-            found = false;
-          }
-        }
-      } while(!found);
-
-      if(bestX >= 0) {
-        cx = bestX;
-        cy = bestY;
-        if(oy < 0 || ox < 0) {
-          ox = cx;
-          oy = cy;
-        }
-      } else {
-        break;
-      }
-    }
-
-    int startDir = dir;
-    int startX = cx;
-    int startY = cy;
-
     int maxStitch = (rand() % (MAXSTITCH - MINSTITCH)) + MINSTITCH;
 
     for(int i = 0; i < maxStitch; ++i) {
-      pixel(img, cx, cy) = 0xff800000ul;
-
-      for(int j = 0; !(pixel(img, cx + dirx(dir), cy + diry(dir)) & 0xff) && j < 9; ++j, dir = (dir + 7) % 8);
-      for(; pixel(img, cx + dirx(dir + 1), cy + diry(dir + 1)) & 0xff; dir = (dir + 1) % 8);
-      cx += dirx(dir);
-      cy += diry(dir);
-
-      int straightX = startX + i * dirx(startDir);
-      int straightY = startY + i * diry(startDir);
-
-      if((straightX - cx) * (straightX - cx) + (straightY - cy) * (straightY - cy) > MAXSTITCHERRORSQR) {
-        break;
-      } else {
-        if(!(pixel(img, cx, cy) & 0xff)) break;
+      switch(mode) {
+        case MODE_RIGHT:
+          pixel(img, cx, cy) = 0xff800000ul;
+          if(pixel(img, cx + 1, cy) & 0xff) {
+            ++cx;
+          } else {
+            ++cy;
+            if(pixel(img, cx, cy) & 0xff) {
+              mode = MODE_RIGHTOVERSCAN;
+            } else {
+              mode = MODE_RIGHTBACKSCAN;
+            }
+          }
+          break;
+        case MODE_RIGHTOVERSCAN:
+          if(pixel(img, cx + 1, cy) & 0xff) {
+            ++cx;
+          } else {
+            i = maxStitch;
+            mode = MODE_LEFT;
+          }
+          break;
+        case MODE_RIGHTBACKSCAN:
+          if(pixel(img, cx - 1, cy) & 0xff) {
+            --cx;
+            i = maxStitch;
+            mode = MODE_LEFT;
+          } else if(pixel(img, cx - 1, cy - 1) & 0xff0000) {
+            --cx;
+          } else {
+            running = findStart(img, cx, cy, ox, oy, path);
+            mode = MODE_RIGHT;
+          }
+          break;
+        case MODE_LEFT:
+          pixel(img, cx, cy) = 0xff800000ul;
+          if(pixel(img, cx - 1, cy) & 0xff) {
+            --cx;
+          } else {
+            ++cy;
+            if(pixel(img, cx, cy) & 0xff) {
+              mode = MODE_LEFTOVERSCAN;
+            } else {
+              mode = MODE_LEFTBACKSCAN;
+            }
+          }
+          break;
+        case MODE_LEFTOVERSCAN:
+          if(pixel(img, cx - 1, cy) & 0xff) {
+            --cx;
+          } else {
+            i = maxStitch;
+            mode = MODE_RIGHT;
+          }
+          break;
+        case MODE_LEFTBACKSCAN:
+          if(pixel(img, cx + 1, cy) & 0xff) {
+            ++cx;
+            i = maxStitch;
+            mode = MODE_RIGHT;
+          } else if(pixel(img, cx + 1, cy - 1) & 0xff0000) {
+            ++cx;
+          } else {
+            running = findStart(img, cx, cy, ox, oy, path);
+            mode = MODE_RIGHT;
+          }
+          break;
       }
     }
 
