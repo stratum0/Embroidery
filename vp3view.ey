@@ -17,7 +17,7 @@
 "0123456789ABCDEF" ==:base16digits
 
 {
-  [ -01 _ 16 div base16digits * -01 16 mod base16digits * ] reverse str .fromArray
+  [ -01 _ 16 div base16digits * -01 16 mod base16digits * ] str .fromArray
 } /base16encode2 deffd
 
 sys .argv len 3 neq { "Usage: ./vp3view.ey <file.vp3> <output.svg>" die } rep
