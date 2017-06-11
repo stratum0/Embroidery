@@ -38,7 +38,7 @@ sys .file "<-" via
   } /evolve deffst
 
   [ 0 1 2 ]
-  5 |evolve rep
+  7 |evolve rep
   { ==i [
     { i 0 eq } { 0 line }
     { i 1 eq } { 4 line }
